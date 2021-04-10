@@ -25,9 +25,8 @@ int main(int argc, char const* argv[]) {
         ans_margin, satellite_threshold);
 
     mapper.trainBF();
-    // mapper.writeBF();
-    // mapper.readBF();
     mapper.mapRead();
+    mapper.displayResult();
 
     return 0;
 }

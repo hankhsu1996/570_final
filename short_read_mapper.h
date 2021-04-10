@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <string>
 
+#include "bml_selector.h"
 #include "layer.h"
 
 using namespace std;
@@ -28,43 +29,56 @@ class ShortReadMapper {
     // 16 MB for each Bloom filter in layer 1
     // 64 kB for each Bloom filter in layer 2
     // 256 Bytes for each Bloom filter in layer 3
-    long _bf_size1 = 16 * 1024 * 1024 * 8;
-    long _bf_size2 = 64 * 1024 * 8;
-    long _bf_size3 = 256 * 8;
+    long _bf_size1;
+    long _bf_size2;
+    long _bf_size3;
 
     // 256 layer 1 Bloom filters
     // 256 layer 2 Bloom filters associated with one layer 1 BF
     // 256 layer 3 Bloom filters associated with one layer 2 BF
-    long _bf_amount1 = 256;
-    long _bf_amount2 = 256;
-    long _bf_amount3 = 256;
+    long _bf_amount1;
+    long _bf_amount2;
+    long _bf_amount3;
 
-    long _bf_total1 = 256;
-    long _bf_total2 = 256 * 256;
-    long _bf_total3 = 256 * 256 * 256;
+    long _bf_total1;
+    long _bf_total2;
+    long _bf_total3;
 
     // Save 256 * 256 * 256 seeds in a Bloom filter in layer 1
     // Save 256 * 256 seeds in a Bloom filter in layer 2
     // Save 256 seeds in a Bloom filter in layer 3
-    long _seed_range1 = 256 * 256 * 256;
-    long _seed_range2 = 256 * 256;
-    long _seed_range3 = 256;
-
-    Layer* _layer[3];
-    // Layer a;
+    long _seed_range1;
+    long _seed_range2;
+    long _seed_range3;
 
     // Mapping configuration
-    long _test_num = 10000;
-    long _ref_size = 2948627755;
+    long _test_num;
+    long _ref_size;
+
+    // Hierarchical Bloom filter layers
+    Layer* _layer[3];
+
+    // Full reference sequence
+    char* _ref_seq;
+
+    // BML selector
+    BMLSelector* _bml_sel;
+
+    // Result
+    int _correctly_mapped;
+    int _wrongly_mapped;
+    int _satellite;
+    int _not_mapped;
 
     void genSeedMask();
-    void readBase(uint64_t& out, char& base);
-    void queryLayer(string&, int, long, long);
+    void updateSeed(char&, uint64_t&);
+    void updateRefSeq(char&, long);
+    int queryLayer(string&, int, long, long);
+    string getRefSeqFromLoc(long, int);
+    bool isSatellite(int[], int);
 
    public:
-    ShortReadMapper(string ref_path, string read_path, long read_len,
-                    long seed_len, long query_shift_amt, long hit_threshold,
-                    long ans_margin, long satellate_threshold);
+    ShortReadMapper(string&, string&, long, long, long, long, long, long);
 
     ~ShortReadMapper();
 
@@ -72,6 +86,7 @@ class ShortReadMapper {
     void writeBF();
     void readBF();
     void mapRead();
+    void displayResult();
 };
 
 #endif

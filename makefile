@@ -1,5 +1,5 @@
-HEADER_FILES = short_read_mapper.h layer.h
-CPP_FILES = main.cpp short_read_mapper.cpp layer.cpp
+HEADER_FILES = short_read_mapper.h layer.h bml_selector.h
+CPP_FILES = main.cpp short_read_mapper.cpp layer.cpp bml_selector.cpp
 EXECUTABLE = short_read_mapper
 
 all: main run

@@ -55,7 +55,8 @@ void Layer::update(uint64_t seed, long base_cnt) {
     _memory[mem_addr] |= 1 << (31 - mem_bit);
 }
 
-void Layer::query(uint64_t& seed, int hit_cnt[], long hier_offset) {
+void Layer::query(uint64_t& seed, int hit_cnt[], long hier_offset,
+                  bool or_next) {
     // hash_function
     uint64_t hash_val = (seed ^ _hash_factor) & _bf_mask;
 
@@ -67,7 +68,16 @@ void Layer::query(uint64_t& seed, int hit_cnt[], long hier_offset) {
         long mem_addr = mem_idx / 32;
         int mem_bit = mem_idx % 32;
 
-        hit_cnt[i] += isHit(_memory[mem_addr], mem_bit);
+        bool hit = isHit(_memory[mem_addr], mem_bit);
+
+        if (or_next) {
+            mem_idx += 1;
+            mem_addr = mem_idx / 32;
+            mem_bit = mem_idx % 32;
+            hit |= isHit(_memory[mem_addr], mem_bit);
+        }
+
+        hit_cnt[i] += hit;
     }
 }
 

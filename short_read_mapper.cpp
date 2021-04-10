@@ -2,7 +2,9 @@
 
 #include <unistd.h>
 
+#include <cmath>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <random>
 #include <string>
@@ -15,22 +17,56 @@ void ShortReadMapper::genSeedMask() {
     _seed_mask = seed_mask;
 }
 
-void ShortReadMapper::readBase(uint64_t& out, char& base) {
+void ShortReadMapper::updateSeed(char& base, uint64_t& seed) {
     if (base == 'A' || base == 'a')
-        out = (out << 2) + 0;
+        seed = (seed << 2) + 0;
     else if (base == 'C' || base == 'c')
-        out = (out << 2) + 1;
+        seed = (seed << 2) + 1;
     else if (base == 'G' || base == 'g')
-        out = (out << 2) + 2;
+        seed = (seed << 2) + 2;
     else if (base == 'T' || base == 't')
-        out = (out << 2) + 3;
+        seed = (seed << 2) + 3;
 }
 
-void ShortReadMapper::queryLayer(string& read, int layer_id, long hier_offset,
-                                 long base_offset) {
+void ShortReadMapper::updateRefSeq(char& base, long base_cnt) {
+    if (base == 'A' || base == 'a')
+        _ref_seq[base_cnt] = 'A';
+    else if (base == 'C' || base == 'c')
+        _ref_seq[base_cnt] = 'C';
+    else if (base == 'G' || base == 'g')
+        _ref_seq[base_cnt] = 'G';
+    else if (base == 'T' || base == 't')
+        _ref_seq[base_cnt] = 'T';
+}
+
+string ShortReadMapper::getRefSeqFromLoc(long loc, int len) {
+    // TODO: char* does not have terminating char now
+    char* seq = new char[len];
+    for (int i = 0; i < len; i++) {
+        seq[i] = _ref_seq[loc + i];
+    }
+    return string(seq);
+}
+
+bool ShortReadMapper::isSatellite(int hit_cnt[], int bf_amount) {
+    int map_cnt = 0;
+
+    for (int i = 0; i < bf_amount; i++) {
+        if (hit_cnt[i] > _hit_threshold) {
+            map_cnt += 1;
+        }
+    }
+
+    return map_cnt > _satellate_threshold;
+}
+
+int ShortReadMapper::queryLayer(string& read, int layer_id, long hier_offset,
+                                long base_offset) {
     /* In each layer, query every seeds of the read and
     record the hit count. If hit count > threshold, recursively
     qurey the next layer */
+
+    int rv = -1;
 
     if (layer_id == 1) {
         // Build layer 1 hit count array
@@ -40,15 +76,18 @@ void ShortReadMapper::queryLayer(string& read, int layer_id, long hier_offset,
         // Generate seed
         uint64_t seed = 0;
         for (int i = 0; i < read.length(); i++) {
-            readBase(seed, read[i]);
+            updateSeed(read[i], seed);
             seed &= _seed_mask;
 
             // When the seed is not long enough, keep reading base
             if (i < _seed_len - 1) continue;
 
             // Query the layer 1
-            _layer[0]->query(seed, hit_cnt, hier_offset);
+            _layer[0]->query(seed, hit_cnt, hier_offset, false);
         }
+
+        // If too many hits, return satelllite code
+        if (isSatellite(hit_cnt, _bf_amount1)) return -2;
 
         // For each Bloom filter that has more than _hit_threshold hits,
         // query the next layer.
@@ -56,7 +95,7 @@ void ShortReadMapper::queryLayer(string& read, int layer_id, long hier_offset,
             if (hit_cnt[i] > _hit_threshold) {
                 long hier_offset_next = i * _bf_amount2 * _bf_size2;
                 long base_offset_next = i * _seed_range1;
-                queryLayer(read, 2, hier_offset_next, base_offset_next);
+                rv = queryLayer(read, 2, hier_offset_next, base_offset_next);
             }
         }
     }
@@ -68,15 +107,18 @@ void ShortReadMapper::queryLayer(string& read, int layer_id, long hier_offset,
         // Generate seed
         uint64_t seed = 0;
         for (int i = 0; i < read.length(); i++) {
-            readBase(seed, read[i]);
+            updateSeed(read[i], seed);
             seed &= _seed_mask;
 
             // When the seed is not long enough, keep reading base
             if (i < _seed_len - 1) continue;
 
             // Query the layer 2
-            _layer[1]->query(seed, hit_cnt, hier_offset);
+            _layer[1]->query(seed, hit_cnt, hier_offset, false);
         }
+
+        // If too many hits, return satelllite code
+        if (isSatellite(hit_cnt, _bf_amount2)) return -2;
 
         // For each Bloom filter that has more than _hit_threshold hits,
         // query the next layer.
@@ -85,34 +127,41 @@ void ShortReadMapper::queryLayer(string& read, int layer_id, long hier_offset,
                 long hier_offset_next =
                     hier_offset + i * _bf_amount3 * _bf_size3;
                 long base_offset_next = base_offset + i * _seed_range2;
-                queryLayer(read, 3, hier_offset_next, base_offset_next);
+                rv = queryLayer(read, 3, hier_offset_next, base_offset_next);
             }
         }
     }
     else if (layer_id == 3) {
         // Build layer 3 hit count array
-        int hit_cnt[_bf_amount3];
-        for (int i = 0; i < _bf_amount3; i++) hit_cnt[i] = 0;
+        int hit_cnt_or[_bf_amount3];
+        for (int i = 0; i < _bf_amount3; i++) hit_cnt_or[i] = 0;
 
         // Generate seed
         uint64_t seed = 0;
         for (int i = 0; i < read.length(); i++) {
-            readBase(seed, read[i]);
+            updateSeed(read[i], seed);
             seed &= _seed_mask;
 
             // When the seed is not long enough, keep reading base
             if (i < _seed_len - 1) continue;
 
             // Query the layer 3
-            _layer[2]->query(seed, hit_cnt, hier_offset);
+            _layer[2]->query(seed, hit_cnt_or, hier_offset, true);
         }
+
+        // If too many hits, return satelllite code
+        if (isSatellite(hit_cnt_or, _bf_amount3)) return -2;
 
         // Because this is the last layer, we can now use the BML
         // selector to calculate the score.
         for (int i = 0; i < _bf_amount3; i++) {
-            if (hit_cnt[i] > _hit_threshold) {
-                // Calculate the CML (base_offset)
-                long cml = base_offset + i * _seed_range3;
+            if (hit_cnt_or[i] > _hit_threshold) {
+                rv = 0;
+                // Calculate the CML location
+                long cml_loc = base_offset + i * _seed_range3;
+                int seq_len = _seed_range3 * 2;
+                string ref_seq = getRefSeqFromLoc(cml_loc, seq_len);
+                _bml_sel->update(ref_seq, read, cml_loc);
             }
         }
     }
@@ -120,9 +169,10 @@ void ShortReadMapper::queryLayer(string& read, int layer_id, long hier_offset,
         cerr << "Layer ID " << layer_id << " is not recognized" << endl;
         exit(1);
     }
+    return rv;
 }
 
-ShortReadMapper::ShortReadMapper(string ref_path, string read_path,
+ShortReadMapper::ShortReadMapper(string& ref_path, string& read_path,
                                  long read_len, long seed_len,
                                  long query_shift_amt, long hit_threshold,
                                  long ans_margin, long satellate_threshold) {
@@ -138,6 +188,36 @@ ShortReadMapper::ShortReadMapper(string ref_path, string read_path,
     _hit_threshold = hit_threshold;
     _ans_margin = ans_margin;
     _satellate_threshold = satellate_threshold;
+
+    // Bloom filters configuration
+    // 16 MB for each Bloom filter in layer 1
+    // 64 kB for each Bloom filter in layer 2
+    // 256 Bytes for each Bloom filter in layer 3
+    _bf_size1 = 16 * 1024 * 1024 * 8;
+    _bf_size2 = 64 * 1024 * 8;
+    _bf_size3 = 256 * 8;
+
+    // 256 layer 1 Bloom filters
+    // 256 layer 2 Bloom filters associated with one layer 1 BF
+    // 256 layer 3 Bloom filters associated with one layer 2 BF
+    _bf_amount1 = 256;
+    _bf_amount2 = 256;
+    _bf_amount3 = 256;
+
+    _bf_total1 = 256;
+    _bf_total2 = 256 * 256;
+    _bf_total3 = 256 * 256 * 256;
+
+    // Save 256 * 256 * 256 seeds in a Bloom filter in layer 1
+    // Save 256 * 256 seeds in a Bloom filter in layer 2
+    // Save 256 seeds in a Bloom filter in layer 3
+    _seed_range1 = 256 * 256 * 256;
+    _seed_range2 = 256 * 256;
+    _seed_range3 = 256;
+
+    // Mapping configuration
+    _test_num = 10000;
+    _ref_size = 2948627755;
 
     // Generate hash factor
     int rand_seed = 666;
@@ -156,12 +236,26 @@ ShortReadMapper::ShortReadMapper(string ref_path, string read_path,
                           hash_factor2);
     _layer[2] = new Layer(_bf_size3, _bf_amount3, _bf_total3, _seed_range3,
                           hash_factor3);
+
+    // Initialize _ref_seq
+    _ref_seq = new char[_ref_size];
+
+    // Instantiate BML selector
+    _bml_sel = new BMLSelector();
+
+    // Result
+    _correctly_mapped = 0;
+    _wrongly_mapped = 0;
+    _satellite = 0;
+    _not_mapped = 0;
 }
 
 ShortReadMapper::~ShortReadMapper() {
     for (int i = 0; i < 3; i++) {
         delete _layer[i];
     }
+    delete _ref_seq;
+    delete _bml_sel;
 }
 
 void ShortReadMapper::trainBF() {
@@ -169,7 +263,7 @@ void ShortReadMapper::trainBF() {
 
     // Seed
     uint64_t seed = 0;
-    int base_cnt = 0;
+    long base_cnt = 0;
 
     // Open ref file
     ifstream ref_seq_fs(_ref_path);
@@ -189,8 +283,9 @@ void ShortReadMapper::trainBF() {
             if (base_cnt && base_cnt % 10000000 == 0)
                 printf("Processed %d seeds\n", base_cnt);
 
-            readBase(seed, line[i]);
+            updateSeed(line[i], seed);
             seed &= _seed_mask;
+            updateRefSeq(line[i], base_cnt);
 
             // If the seed variable contains more than seed_len seeds,
             // start updating the Bloom filter.
@@ -207,12 +302,14 @@ void ShortReadMapper::trainBF() {
 }
 
 void ShortReadMapper::writeBF() {
+    // Currently not used
     _layer[0]->write_bf_bin("layer1_bf.dat");
     _layer[1]->write_bf_bin("layer2_bf.dat");
     _layer[2]->write_bf_bin("layer3_bf.dat");
 }
 
 void ShortReadMapper::readBF() {
+    // Currently not used
     _layer[0]->read_bf_bin("layer1_bf.dat");
     _layer[1]->read_bf_bin("layer2_bf.dat");
     _layer[2]->read_bf_bin("layer3_bf.dat");
@@ -241,7 +338,7 @@ void ShortReadMapper::mapRead() {
     string golden_loc_str;
     string fwd_rev;
     string read;
-    while (true) {
+    while (read_cnt < _test_num) {
         /* Read format:
         >chr1   chr1-1536540    116446253       -
         <Original sequence>
@@ -266,14 +363,39 @@ void ShortReadMapper::mapRead() {
         // Only map the forward sequence, ignore the reverse sequence
         if (fwd_rev == "-") continue;
 
-        cout << read << endl;
+        cout << "read: " << read << endl;
 
         // Query the read in each layer recursively
-        // queryLayer(read, layer_id, hier_offset, base_offset)
-        queryLayer(read, 1, 0, 0);
+        _bml_sel->init();
+        int rv = queryLayer(read, 1, 0, 0);
+        if (rv == 0) {
+            // Without error
+            long map_loc = _bml_sel->getMapLoc();
+            if (golden_loc == map_loc)
+                _correctly_mapped += 1;
+            else
+                _wrongly_mapped += 1;
+        }
+        else if (rv == -1) {
+            // Not mapped
+            _not_mapped += 1;
+        }
+        else if (rv == -2) {
+            // Satellite
+            _satellite += 1;
+        }
 
         read_cnt += 1;
         line_cnt = (line_cnt + 1) % 3;
-        if (read_cnt > _test_num) break;
     }
+}
+
+void ShortReadMapper::displayResult() {
+    int sum = _correctly_mapped + _wrongly_mapped + _satellite + _not_mapped;
+
+    cout << "Correctly mapped: " << setw(6) << _correctly_mapped << endl;
+    cout << "Wrongly mapped:   " << setw(6) << _wrongly_mapped << endl;
+    cout << "Satellite:        " << setw(6) << _satellite << endl;
+    cout << "Not mapped:       " << setw(6) << _not_mapped << endl;
+    cout << "Total:            " << setw(6) << sum << endl;
 }
