@@ -1,6 +1,6 @@
-HEADER_FILES = short_seq_mapper.h layer.h
-CPP_FILES = main.cpp short_seq_mapper.cpp layer.cpp
-EXECUTABLE = short_seq_mapper
+HEADER_FILES = short_read_mapper.h layer.h
+CPP_FILES = main.cpp short_read_mapper.cpp layer.cpp
+EXECUTABLE = short_read_mapper
 
 all: main run
 
@@ -10,3 +10,7 @@ main: $(HEADER_FILES) $(CPP_FILES)
 .PHONY: run
 run:
 	@$(EXECUTABLE)
+
+.PHONY: clean
+clean:
+	@rm -f *.hex

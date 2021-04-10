@@ -6,12 +6,10 @@
 
 using namespace std;
 
-#define WRITE_BF
-
 #ifndef __SHORT_SEQ_MAPPER__
 #define __SHORT_SEQ_MAPPER__
 
-class ShortSeqMapper {
+class ShortReadMapper {
    private:
     // File paths
     string _ref_path;
@@ -60,13 +58,15 @@ class ShortSeqMapper {
     long _ref_size = 2948627755;
 
     void genSeedMask();
+    void readBase(uint64_t& out, char& base);
+    void queryLayer(string&, int, long, long);
 
    public:
-    ShortSeqMapper(string ref_path, string read_path, long read_len,
-                   long seed_len, long query_shift_amt, long hit_threshold,
-                   long ans_margin, long satellate_threshold);
+    ShortReadMapper(string ref_path, string read_path, long read_len,
+                    long seed_len, long query_shift_amt, long hit_threshold,
+                    long ans_margin, long satellate_threshold);
 
-    ~ShortSeqMapper();
+    ~ShortReadMapper();
 
     void train();
     void map();
