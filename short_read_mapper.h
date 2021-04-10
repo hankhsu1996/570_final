@@ -68,8 +68,10 @@ class ShortReadMapper {
 
     ~ShortReadMapper();
 
-    void train();
-    void map();
+    void trainBF();
+    void writeBF();
+    void readBF();
+    void mapRead();
 };
 
 #endif

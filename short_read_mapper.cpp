@@ -164,7 +164,9 @@ ShortReadMapper::~ShortReadMapper() {
     }
 }
 
-void ShortReadMapper::train() {
+void ShortReadMapper::trainBF() {
+    cout << "Start training the Bloom filter" << endl;
+
     // Seed
     uint64_t seed = 0;
     int base_cnt = 0;
@@ -202,15 +204,23 @@ void ShortReadMapper::train() {
             if (base_cnt == _ref_size) break;
         }
     }
-
-#ifdef WRITE_BF
-    _layer[0]->write_bf("layer1_bf.hex");
-    _layer[1]->write_bf("layer2_bf.hex");
-    _layer[2]->write_bf("layer3_bf.hex");
-#endif
 }
 
-void ShortReadMapper::map() {
+void ShortReadMapper::writeBF() {
+    _layer[0]->write_bf_bin("layer1_bf.dat");
+    _layer[1]->write_bf_bin("layer2_bf.dat");
+    _layer[2]->write_bf_bin("layer3_bf.dat");
+}
+
+void ShortReadMapper::readBF() {
+    _layer[0]->read_bf_bin("layer1_bf.dat");
+    _layer[1]->read_bf_bin("layer2_bf.dat");
+    _layer[2]->read_bf_bin("layer3_bf.dat");
+}
+
+void ShortReadMapper::mapRead() {
+    cout << "Start mapping the reads" << endl;
+
     // Open read file
     ifstream read_seq_fs(_read_path);
     if (!read_seq_fs.is_open()) {

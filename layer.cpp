@@ -71,7 +71,7 @@ void Layer::query(uint64_t& seed, int hit_cnt[], long hier_offset) {
     }
 }
 
-void Layer::write_bf(string path) {
+void Layer::write_bf_hex(string path) {
     ofstream bf_os(path);
 
     if (!bf_os.is_open()) {
@@ -85,4 +85,36 @@ void Layer::write_bf(string path) {
         bf_os << hex << setw(8) << setfill('0') << _memory[i];
         if (i % 16 == 15) bf_os << endl;
     }
+}
+
+void Layer::write_bf_bin(string path) {
+    ofstream bf_os(path, ios::out | ios::binary);
+
+    if (!bf_os.is_open()) {
+        cerr << "Cannot open " << path << endl;
+        exit(1);
+    }
+
+    cout << "Write Bloom filter content to file " << path << endl;
+
+    for (int i = 0; i < _mem_size; i++) {
+        bf_os.write((char*)&_memory[i], sizeof(int));
+    }
+    bf_os.close();
+}
+
+void Layer::read_bf_bin(string path) {
+    ifstream bf_is(path, ios::in | ios::binary);
+
+    if (!bf_is.is_open()) {
+        cerr << "Cannot open " << path << endl;
+        exit(1);
+    }
+
+    cout << "Read Bloom filter content from file " << path << endl;
+
+    for (int i = 0; i < _mem_size; i++) {
+        bf_is.read((char*)&_memory[i], sizeof(int));
+    }
+    bf_is.close();
 }

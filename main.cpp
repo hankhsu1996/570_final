@@ -2,8 +2,6 @@
 
 #include "short_read_mapper.h"
 
-// #define WRITE_BF
-
 int main(int argc, char const* argv[]) {
     // File paths
     string ref_path = "../dataset/hg38_short.fa";
@@ -26,12 +24,10 @@ int main(int argc, char const* argv[]) {
         ref_path, read_path, read_len, seed_len, query_shift_amt, hit_threshold,
         ans_margin, satellite_threshold);
 
-#ifdef WRITE_BF
-    cout << "WRITE_BF: true" << endl;
-#endif
-
-    mapper.train();
-    mapper.map();
+    mapper.trainBF();
+    // mapper.writeBF();
+    // mapper.readBF();
+    mapper.mapRead();
 
     return 0;
 }

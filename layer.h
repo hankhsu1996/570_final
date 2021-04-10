@@ -28,7 +28,9 @@ class Layer {
     ~Layer();
     void update(uint64_t, long);
     void query(uint64_t&, int[], long);
-    void write_bf(string);
+    void write_bf_hex(string);
+    void write_bf_bin(string);
+    void read_bf_bin(string);
 };
 
 #endif
