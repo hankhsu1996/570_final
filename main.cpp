@@ -10,14 +10,18 @@ int main(int argc, char const* argv[]) {
     // Configuration
     long read_len = 100;
     long seed_len = 20;
+
     // When querying, shift the seed by N.
     long query_shift_amt = 1;
+
     // If more than N seeds are exact matches, then a CML is found.
     long hit_threshold = 70;
+
     // If the location returned by the Bloom filter - answer < N,
     // then it is a successful mapping.
     long ans_margin = 20;
-    // If the Bloom filter has #CMLs > N, then it is considered a satellite DNA.
+
+    // If a read has #CMLs > N, then it's considered a satellite DNA.
     long satellite_threshold = 10;
 
     ShortReadMapper mapper = ShortReadMapper(

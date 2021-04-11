@@ -21,12 +21,12 @@ class Layer {
     // Bloom filter memory
     int* _memory;
     void genBFMask();
-    bool isHit(int&, int&);
+    bool isHit(int, int);
 
    public:
-    Layer(long, long, long, long, uint64_t);
+    Layer(long, long, long, long, uint64_t&);
     ~Layer();
-    void update(uint64_t, long);
+    void update(uint64_t&, long);
     void query(uint64_t&, int[], long, bool);
     void write_bf_hex(string);
     void write_bf_bin(string);

@@ -358,9 +358,6 @@ void ShortReadMapper::trainBF(bool ignoreSatellite) {
 
             // For each character, generate a seed
             for (int i = 0; i < line.size(); i++) {
-                if (base_cnt_fp && base_cnt_fp % 10000000 == 0)
-                    cout << "Counted for " << base_cnt_fp << " seeds" << endl;
-
                 updateSeed(line[i], seed_fp);
 
                 // If the seed variable contains more than seed_len seeds,
@@ -370,6 +367,8 @@ void ShortReadMapper::trainBF(bool ignoreSatellite) {
                 }
 
                 base_cnt_fp += 1;
+                if (base_cnt_fp % 10000000 == 0)
+                    cout << "Counted for " << base_cnt_fp << " seeds" << endl;
                 if (base_cnt_fp == _ref_size) break;
             }
         }
@@ -386,9 +385,6 @@ void ShortReadMapper::trainBF(bool ignoreSatellite) {
 
         // For each character, generate a seed
         for (int i = 0; i < line.size(); i++) {
-            if (base_cnt && base_cnt % 10000000 == 0)
-                cout << "Processed " << base_cnt << " seeds" << endl;
-
             updateSeed(line[i], seed);
             updateRefSeq(line[i], base_cnt);
 
@@ -412,6 +408,8 @@ void ShortReadMapper::trainBF(bool ignoreSatellite) {
             }
 
             base_cnt += 1;
+            if (base_cnt % 10000000 == 0)
+                cout << "Processed " << base_cnt << " seeds" << endl;
             if (base_cnt == _ref_size) break;
         }
     }
@@ -451,9 +449,8 @@ void ShortReadMapper::mapRead() {
 
     // Read reads
     int read_cnt = 0;
-    int line_cnt = 0;
     string token;
-    string golden_loc_str;
+    string golden_loc_s;
     string fwd_rev;
     string read;
 
@@ -464,19 +461,14 @@ void ShortReadMapper::mapRead() {
         <Simulater generated sequence>
         */
 
-        // Ignore reference sequence name
-        read_seq_fs >> token;
-        // Ignore read name
-        read_seq_fs >> token;
-        // Get golden location
-        read_seq_fs >> golden_loc_str;
-        long golden_loc = stol(golden_loc_str);
-        // Get forward/reverse
-        read_seq_fs >> fwd_rev;
-        // Ignore original sequence
-        read_seq_fs >> token;
-        // Get simulator generated read sequence
-        read_seq_fs >> read;
+        read_seq_fs >> token;         // Ignore reference sequence name
+        read_seq_fs >> token;         // Ignore read name
+        read_seq_fs >> golden_loc_s;  // Get golden location
+        read_seq_fs >> fwd_rev;       // Get forward/reverse
+        read_seq_fs >> token;         // Ignore original sequence
+        read_seq_fs >> read;          // Get simulator generated read sequence
+
+        long golden_loc = stol(golden_loc_s);
 
         // Only map the forward sequence, ignore the reverse sequence
         if (fwd_rev == "-") continue;
@@ -490,8 +482,6 @@ void ShortReadMapper::mapRead() {
         updateScoreboard(rv, golden_loc, mapped_loc);
 
         read_cnt += 1;
-        line_cnt = (line_cnt + 1) % 3;
-
         if (read_cnt % 1000 == 0)
             cout << "Processed " << read_cnt << " reads" << endl;
     }
@@ -500,9 +490,9 @@ void ShortReadMapper::mapRead() {
 void ShortReadMapper::displayResult() {
     int sum = _correctly_mapped + _wrongly_mapped + _satellite + _not_mapped;
 
-    cout << "Correctly mapped: " << setw(6) << _correctly_mapped << endl;
-    cout << "Wrongly mapped:   " << setw(6) << _wrongly_mapped << endl;
-    cout << "Satellite:        " << setw(6) << _satellite << endl;
-    cout << "Not mapped:       " << setw(6) << _not_mapped << endl;
-    cout << "Total:            " << setw(6) << sum << endl;
+    cout << "Correctly mapped: " << setw(5) << _correctly_mapped << endl;
+    cout << "Wrongly mapped:   " << setw(5) << _wrongly_mapped << endl;
+    cout << "Satellite:        " << setw(5) << _satellite << endl;
+    cout << "Not mapped:       " << setw(5) << _not_mapped << endl;
+    cout << "Total:            " << setw(5) << sum << endl;
 }

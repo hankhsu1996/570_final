@@ -91,9 +91,7 @@ class ShortReadMapper {
 
    public:
     ShortReadMapper(string&, string&, long, long, long, long, long, long);
-
     ~ShortReadMapper();
-
     void trainBF(bool);
     void writeBF();
     void readBF();

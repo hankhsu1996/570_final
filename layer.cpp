@@ -14,12 +14,12 @@ void Layer::genBFMask() {
     }
 }
 
-bool Layer::isHit(int& mem_content, int& mem_bit) {
+bool Layer::isHit(int mem_content, int mem_bit) {
     return (mem_content & (1 << (31 - mem_bit))) != 0;
 }
 
 Layer::Layer(long bf_size, long bf_amount, long bf_total, long seed_range,
-             uint64_t hash_factor) {
+             uint64_t& hash_factor) {
     _bf_size = bf_size;
     _bf_amount = bf_amount;
     _bf_total = bf_total;
@@ -32,7 +32,7 @@ Layer::Layer(long bf_size, long bf_amount, long bf_total, long seed_range,
 
 Layer::~Layer() { delete _memory; }
 
-void Layer::update(uint64_t seed, long base_cnt) {
+void Layer::update(uint64_t& seed, long base_cnt) {
     // hash function
     uint64_t hash_val = (seed ^ _hash_factor) & _bf_mask;
 
