@@ -23,7 +23,7 @@ class ShortReadMapper {
     long _query_skip_amt;
     long _hit_threshold;
     long _ans_margin;
-    long _satellate_threshold;
+    long _satellite_threshold;
 
     // Bloom filters configuration
     // 16 MB for each Bloom filter in layer 1
@@ -64,18 +64,26 @@ class ShortReadMapper {
     // BML selector
     BMLSelector* _bml_sel;
 
-    // Result
+    // Scoreboard
     int _correctly_mapped;
     int _wrongly_mapped;
     int _satellite;
     int _not_mapped;
 
+    // Total hit count in each layer
+    // If hit_cnt > _satellite_threshold, read is satellite
+    int _layer1_hit_cnt;
+    int _layer2_hit_cnt;
+    int _layer3_hit_cnt;
+
     void genSeedMask();
     void updateSeed(char&, uint64_t&);
     void updateRefSeq(char&, long);
+    void initQuery();
     int queryLayer(string&, int, long, long);
+    void updateScoreboard(int&, long&, long&);
     string getRefSeqFromLoc(long, int);
-    bool isSatellite(int[], int);
+    bool isSatellite(int, int[]);
 
    public:
     ShortReadMapper(string&, string&, long, long, long, long, long, long);

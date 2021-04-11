@@ -9,6 +9,10 @@
 #include <random>
 #include <string>
 
+#define READ_NOT_MAPPED 0b00
+#define READ_MAPPED 0b01
+#define READ_SATELLITE 0b10
+
 using namespace std;
 
 void ShortReadMapper::genSeedMask() {
@@ -45,28 +49,59 @@ string ShortReadMapper::getRefSeqFromLoc(long loc, int len) {
     for (int i = 0; i < len; i++) {
         seq[i] = _ref_seq[loc + i];
     }
-    return string(seq);
+    string rv = string(seq);
+    delete seq;
+    return rv;
 }
 
-bool ShortReadMapper::isSatellite(int hit_cnt[], int bf_amount) {
-    int map_cnt = 0;
-
-    for (int i = 0; i < bf_amount; i++) {
-        if (hit_cnt[i] > _hit_threshold) {
-            map_cnt += 1;
+bool ShortReadMapper::isSatellite(int layer, int hit_cnt[]) {
+    if (layer == 1) {
+        for (int i = 0; i < _bf_amount1; i++) {
+            if (hit_cnt[i] >= _hit_threshold) {
+                _layer1_hit_cnt += 1;
+            }
         }
+        return _layer1_hit_cnt > _satellite_threshold;
     }
+    else if (layer == 2) {
+        for (int i = 0; i < _bf_amount2; i++) {
+            if (hit_cnt[i] >= _hit_threshold) {
+                _layer2_hit_cnt += 1;
+            }
+        }
+        return _layer2_hit_cnt > _satellite_threshold;
+    }
+    else if (layer == 3) {
+        for (int i = 0; i < _bf_amount3; i++) {
+            if (hit_cnt[i] >= _hit_threshold) {
+                _layer3_hit_cnt += 1;
+            }
+        }
+        return _layer3_hit_cnt > _satellite_threshold;
+    }
+    return false;
+}
 
-    return map_cnt > _satellate_threshold;
+void ShortReadMapper::initQuery() {
+    _bml_sel->init();
+    _layer1_hit_cnt = 0;
+    _layer2_hit_cnt = 0;
+    _layer3_hit_cnt = 0;
 }
 
 int ShortReadMapper::queryLayer(string& read, int layer_id, long hier_offset,
                                 long base_offset) {
-    /* In each layer, query every seeds of the read and
+    /*
+    In each layer, query every seeds of the read and
     record the hit count. If hit count > threshold, recursively
-    qurey the next layer */
+    qurey the next layer.
 
-    int rv = -1;
+    Return value:
+    0th bit: read mapped
+    1st bit: satellite
+    */
+
+    int rv = READ_NOT_MAPPED;
 
     if (layer_id == 1) {
         // Build layer 1 hit count array
@@ -87,15 +122,19 @@ int ShortReadMapper::queryLayer(string& read, int layer_id, long hier_offset,
         }
 
         // If too many hits, return satelllite code
-        if (isSatellite(hit_cnt, _bf_amount1)) return -2;
+        if (isSatellite(1, hit_cnt)) return READ_SATELLITE;
 
         // For each Bloom filter that has more than _hit_threshold hits,
         // query the next layer.
         for (int i = 0; i < _bf_amount1; i++) {
-            if (hit_cnt[i] > _hit_threshold) {
+            if (hit_cnt[i] >= _hit_threshold) {
                 long hier_offset_next = i * _bf_amount2 * _bf_size2;
                 long base_offset_next = i * _seed_range1;
-                rv = queryLayer(read, 2, hier_offset_next, base_offset_next);
+
+                rv |= queryLayer(read, 2, hier_offset_next, base_offset_next);
+                // If we found the read is satellite at the child layer,
+                // return immediately.
+                if (rv & READ_SATELLITE) return rv;
             }
         }
     }
@@ -118,16 +157,20 @@ int ShortReadMapper::queryLayer(string& read, int layer_id, long hier_offset,
         }
 
         // If too many hits, return satelllite code
-        if (isSatellite(hit_cnt, _bf_amount2)) return -2;
+        if (isSatellite(2, hit_cnt)) return READ_SATELLITE;
 
         // For each Bloom filter that has more than _hit_threshold hits,
         // query the next layer.
         for (int i = 0; i < _bf_amount1; i++) {
-            if (hit_cnt[i] > _hit_threshold) {
+            if (hit_cnt[i] >= _hit_threshold) {
                 long hier_offset_next =
                     hier_offset + i * _bf_amount3 * _bf_size3;
                 long base_offset_next = base_offset + i * _seed_range2;
-                rv = queryLayer(read, 3, hier_offset_next, base_offset_next);
+
+                rv |= queryLayer(read, 3, hier_offset_next, base_offset_next);
+                // If we found the read is satellite at the child layer,
+                // return immediately.
+                if (rv & READ_SATELLITE) return rv;
             }
         }
     }
@@ -150,17 +193,19 @@ int ShortReadMapper::queryLayer(string& read, int layer_id, long hier_offset,
         }
 
         // If too many hits, return satelllite code
-        if (isSatellite(hit_cnt_or, _bf_amount3)) return -2;
+        if (isSatellite(3, hit_cnt_or)) return READ_SATELLITE;
 
         // Because this is the last layer, we can now use the BML
         // selector to calculate the score.
-        for (int i = 0; i < _bf_amount3; i++) {
-            if (hit_cnt_or[i] > _hit_threshold) {
-                rv = 0;
+        for (int i = 0; i < _bf_amount3 - 1; i++) {
+            if (hit_cnt_or[i] >= _hit_threshold) {
+                rv = READ_MAPPED;
                 // Calculate the CML location
                 long cml_loc = base_offset + i * _seed_range3;
                 int seq_len = _seed_range3 * 2;
                 string ref_seq = getRefSeqFromLoc(cml_loc, seq_len);
+
+                // Send one CML to the BML engine
                 _bml_sel->update(ref_seq, read, cml_loc);
             }
         }
@@ -172,10 +217,35 @@ int ShortReadMapper::queryLayer(string& read, int layer_id, long hier_offset,
     return rv;
 }
 
+void ShortReadMapper::updateScoreboard(int& rv, long& golden_loc,
+                                       long& mapped_loc) {
+    /*
+    Return value:
+    0th bit: read mapped
+    1st bit: satellite
+    */
+
+    if (rv & READ_SATELLITE) {
+        // Satellite
+        _satellite += 1;
+    }
+    else if (rv & READ_MAPPED) {
+        // Mapped
+        if (abs(golden_loc - mapped_loc) <= _ans_margin)
+            _correctly_mapped += 1;
+        else
+            _wrongly_mapped += 1;
+    }
+    else {
+        // Not mapped
+        _not_mapped += 1;
+    }
+}
+
 ShortReadMapper::ShortReadMapper(string& ref_path, string& read_path,
                                  long read_len, long seed_len,
                                  long query_shift_amt, long hit_threshold,
-                                 long ans_margin, long satellate_threshold) {
+                                 long ans_margin, long satellite_threshold) {
     // File paths
     _ref_path = ref_path;
     _read_path = read_path;
@@ -187,7 +257,7 @@ ShortReadMapper::ShortReadMapper(string& ref_path, string& read_path,
     _query_skip_amt = query_shift_amt;
     _hit_threshold = hit_threshold;
     _ans_margin = ans_margin;
-    _satellate_threshold = satellate_threshold;
+    _satellite_threshold = satellite_threshold;
 
     // Bloom filters configuration
     // 16 MB for each Bloom filter in layer 1
@@ -243,7 +313,7 @@ ShortReadMapper::ShortReadMapper(string& ref_path, string& read_path,
     // Instantiate BML selector
     _bml_sel = new BMLSelector();
 
-    // Result
+    // Scoreboard
     _correctly_mapped = 0;
     _wrongly_mapped = 0;
     _satellite = 0;
@@ -281,7 +351,7 @@ void ShortReadMapper::trainBF() {
         // For each character, generate a seed
         for (int i = 0; i < line.size(); i++) {
             if (base_cnt && base_cnt % 10000000 == 0)
-                printf("Processed %d seeds\n", base_cnt);
+                cout << "Processed " << base_cnt << " seeds" << endl;
 
             updateSeed(line[i], seed);
             seed &= _seed_mask;
@@ -338,55 +408,44 @@ void ShortReadMapper::mapRead() {
     string golden_loc_str;
     string fwd_rev;
     string read;
+
     while (read_cnt < _test_num) {
         /* Read format:
-        >chr1   chr1-1536540    116446253       -
+        >chr1  chr1-1536540  116446253  -
         <Original sequence>
         <Simulater generated sequence>
         */
 
-        // Reference sequence name
+        // Ignore reference sequence name
         read_seq_fs >> token;
-        // Read name
+        // Ignore read name
         read_seq_fs >> token;
-        // Location
+        // Get golden location
         read_seq_fs >> golden_loc_str;
         long golden_loc = stol(golden_loc_str);
-
-        // Forward/reverse
+        // Get forward/reverse
         read_seq_fs >> fwd_rev;
-        // Original sequence
+        // Ignore original sequence
         read_seq_fs >> token;
-        // Simulator generated sequence
+        // Get simulator generated read sequence
         read_seq_fs >> read;
 
         // Only map the forward sequence, ignore the reverse sequence
         if (fwd_rev == "-") continue;
 
-        cout << "read: " << read << endl;
-
         // Query the read in each layer recursively
-        _bml_sel->init();
+        initQuery();
         int rv = queryLayer(read, 1, 0, 0);
-        if (rv == 0) {
-            // Without error
-            long map_loc = _bml_sel->getMapLoc();
-            if (golden_loc == map_loc)
-                _correctly_mapped += 1;
-            else
-                _wrongly_mapped += 1;
-        }
-        else if (rv == -1) {
-            // Not mapped
-            _not_mapped += 1;
-        }
-        else if (rv == -2) {
-            // Satellite
-            _satellite += 1;
-        }
+
+        // Get mapped location from the BML selector
+        long mapped_loc = _bml_sel->getMapLoc();
+        updateScoreboard(rv, golden_loc, mapped_loc);
 
         read_cnt += 1;
         line_cnt = (line_cnt + 1) % 3;
+
+        if (read_cnt % 1000 == 0)
+            cout << "Processed " << read_cnt << " reads" << endl;
     }
 }
 
@@ -399,3 +458,6 @@ void ShortReadMapper::displayResult() {
     cout << "Not mapped:       " << setw(6) << _not_mapped << endl;
     cout << "Total:            " << setw(6) << sum << endl;
 }
+
+// GTGGGCAAAGGATATGAACAGACACTTCTCAAAAGAAGAC
+// 40

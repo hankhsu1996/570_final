@@ -5,12 +5,13 @@ EXECUTABLE = short_read_mapper
 all: main run
 
 main: $(HEADER_FILES) $(CPP_FILES)
-	@g++ -std=c++11 -O3  -o $(EXECUTABLE) $^
+	g++ -std=c++11 -O3  -o $(EXECUTABLE) $^
 
 .PHONY: run
 run:
-	@$(EXECUTABLE)
+	./$(EXECUTABLE)
 
 .PHONY: clean
 clean:
-	@rm -f *.hex
+	@rm -f *.hex *.dat
+	@rm -f $(EXECUTABLE)

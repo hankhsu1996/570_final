@@ -70,7 +70,7 @@ void Layer::query(uint64_t& seed, int hit_cnt[], long hier_offset,
 
         bool hit = isHit(_memory[mem_addr], mem_bit);
 
-        if (or_next) {
+        if (or_next && i < _bf_amount - 1) {
             mem_idx += 1;
             mem_addr = mem_idx / 32;
             mem_bit = mem_idx % 32;
