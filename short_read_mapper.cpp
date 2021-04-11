@@ -458,6 +458,3 @@ void ShortReadMapper::displayResult() {
     cout << "Not mapped:       " << setw(6) << _not_mapped << endl;
     cout << "Total:            " << setw(6) << sum << endl;
 }
-
-// GTGGGCAAAGGATATGAACAGACACTTCTCAAAAGAAGAC
-// 40
