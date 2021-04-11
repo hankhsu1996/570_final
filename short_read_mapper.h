@@ -1,6 +1,7 @@
 
 #include <cstdlib>
 #include <string>
+#include <unordered_map>
 
 #include "bml_selector.h"
 #include "layer.h"
@@ -76,6 +77,9 @@ class ShortReadMapper {
     int _layer2_hit_cnt;
     int _layer3_hit_cnt;
 
+    // Seed count used to ignore satellite when training BF
+    unordered_map<uint64_t, int> _seed_cnt;
+
     void genSeedMask();
     void updateSeed(char&, uint64_t&);
     void updateRefSeq(char&, long);
@@ -90,7 +94,7 @@ class ShortReadMapper {
 
     ~ShortReadMapper();
 
-    void trainBF();
+    void trainBF(bool);
     void writeBF();
     void readBF();
     void mapRead();

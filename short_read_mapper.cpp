@@ -9,6 +9,8 @@
 #include <random>
 #include <string>
 
+#include "utils.h"
+
 #define READ_NOT_MAPPED 0b00
 #define READ_MAPPED 0b01
 #define READ_SATELLITE 0b10
@@ -30,6 +32,7 @@ void ShortReadMapper::updateSeed(char& base, uint64_t& seed) {
         seed = (seed << 2) + 2;
     else if (base == 'T' || base == 't')
         seed = (seed << 2) + 3;
+    seed &= _seed_mask;
 }
 
 void ShortReadMapper::updateRefSeq(char& base, long base_cnt) {
@@ -147,7 +150,6 @@ int ShortReadMapper::queryLayer(string& read, int layer_id, long hier_offset,
         uint64_t seed = 0;
         for (int i = 0; i < read.length(); i++) {
             updateSeed(read[i], seed);
-            seed &= _seed_mask;
 
             // When the seed is not long enough, keep reading base
             if (i < _seed_len - 1) continue;
@@ -183,7 +185,6 @@ int ShortReadMapper::queryLayer(string& read, int layer_id, long hier_offset,
         uint64_t seed = 0;
         for (int i = 0; i < read.length(); i++) {
             updateSeed(read[i], seed);
-            seed &= _seed_mask;
 
             // When the seed is not long enough, keep reading base
             if (i < _seed_len - 1) continue;
@@ -328,8 +329,9 @@ ShortReadMapper::~ShortReadMapper() {
     delete _bml_sel;
 }
 
-void ShortReadMapper::trainBF() {
+void ShortReadMapper::trainBF(bool ignoreSatellite) {
     cout << "Start training the Bloom filter" << endl;
+    if (ignoreSatellite) cout << "Ignore satellite DNA" << endl;
 
     // Seed
     uint64_t seed = 0;
@@ -342,8 +344,42 @@ void ShortReadMapper::trainBF() {
         exit(1);
     }
 
-    // Parse the ref file line by line
     string line;
+
+    // If ignoreSatellite, start building the _seed_cnt map
+    if (ignoreSatellite) {
+        // First pass seed and base_cnt
+        uint64_t seed_fp = 0;
+        long base_cnt_fp = 0;
+
+        while (ref_seq_fs >> line) {
+            // If the line starts with '>', ignore it
+            if (line[0] == '>') continue;
+
+            // For each character, generate a seed
+            for (int i = 0; i < line.size(); i++) {
+                if (base_cnt_fp && base_cnt_fp % 10000000 == 0)
+                    cout << "Counted for " << base_cnt_fp << " seeds" << endl;
+
+                updateSeed(line[i], seed_fp);
+
+                // If the seed variable contains more than seed_len seeds,
+                // start updating seed count.
+                if (base_cnt_fp >= _seed_len - 1) {
+                    findAndIncrement(_seed_cnt, seed_fp);
+                }
+
+                base_cnt_fp += 1;
+                if (base_cnt_fp == _ref_size) break;
+            }
+        }
+
+        // Set file stream position to the beginning
+        ref_seq_fs.clear();
+        ref_seq_fs.seekg(0, ios::beg);
+    }
+
+    // Parse the ref file line by line
     while (ref_seq_fs >> line) {
         // If the line starts with '>', ignore it
         if (line[0] == '>') continue;
@@ -354,21 +390,33 @@ void ShortReadMapper::trainBF() {
                 cout << "Processed " << base_cnt << " seeds" << endl;
 
             updateSeed(line[i], seed);
-            seed &= _seed_mask;
             updateRefSeq(line[i], base_cnt);
 
             // If the seed variable contains more than seed_len seeds,
             // start updating the Bloom filter.
             if (base_cnt >= _seed_len - 1) {
-                _layer[0]->update(seed, base_cnt);
-                _layer[1]->update(seed, base_cnt);
-                _layer[2]->update(seed, base_cnt);
+                if (ignoreSatellite) {
+                    int cnt = getCount(_seed_cnt, seed);
+                    if (cnt <= _satellite_threshold) {
+                        _layer[0]->update(seed, base_cnt);
+                        _layer[1]->update(seed, base_cnt);
+                        _layer[2]->update(seed, base_cnt);
+                    }
+                }
+                else {
+                    // Normal mode
+                    _layer[0]->update(seed, base_cnt);
+                    _layer[1]->update(seed, base_cnt);
+                    _layer[2]->update(seed, base_cnt);
+                }
             }
 
             base_cnt += 1;
             if (base_cnt == _ref_size) break;
         }
     }
+
+    // printSeedCnt(_seed_cnt);
 }
 
 void ShortReadMapper::writeBF() {

@@ -24,7 +24,8 @@ int main(int argc, char const* argv[]) {
         ref_path, read_path, read_len, seed_len, query_shift_amt, hit_threshold,
         ans_margin, satellite_threshold);
 
-    mapper.trainBF();
+    bool ignoreSatellite = false;
+    mapper.trainBF(ignoreSatellite);
     mapper.mapRead();
     mapper.displayResult();
 
