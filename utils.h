@@ -40,3 +40,5 @@ void printSeedCnt(unordered_map<uint64_t, int>& _seed_cnt) {
         cout << x.first << ": " << x.second << endl;
     }
 }
+
+void printHitCnt(int layer, int hit_cnt[]) {}

@@ -124,6 +124,8 @@ int ShortReadMapper::queryLayer(string& read, int layer_id, long hier_offset,
             _layer[0]->query(seed, hit_cnt, hier_offset, false);
         }
 
+        printHitCnt(1, hit_cnt);
+
         // If too many hits, return satelllite code
         if (isSatellite(1, hit_cnt)) return READ_SATELLITE;
 
@@ -207,7 +209,11 @@ int ShortReadMapper::queryLayer(string& read, int layer_id, long hier_offset,
                 string ref_seq = getRefSeqFromLoc(cml_loc, seq_len);
 
                 // Send one CML to the BML engine
+                _seeding_sw->pause();
+                _seed_extraction_sw->start();
                 _bml_sel->update(ref_seq, read, cml_loc);
+                _seeding_sw->start();
+                _seed_extraction_sw->pause();
             }
         }
     }
@@ -287,7 +293,7 @@ ShortReadMapper::ShortReadMapper(string& ref_path, string& read_path,
     _seed_range3 = 256;
 
     // Mapping configuration
-    _test_num = 10000;
+    _test_num = 30000;
     _ref_size = 2948627755;
 
     // Generate hash factor
@@ -319,6 +325,14 @@ ShortReadMapper::ShortReadMapper(string& ref_path, string& read_path,
     _wrongly_mapped = 0;
     _satellite = 0;
     _not_mapped = 0;
+
+    // Stopwatch
+    _training_sw = new Stopwatch();
+    _seeding_sw = new Stopwatch();
+    _seed_extraction_sw = new Stopwatch();
+    _training_sw->reset();
+    _seeding_sw->reset();
+    _seed_extraction_sw->reset();
 }
 
 ShortReadMapper::~ShortReadMapper() {
@@ -327,11 +341,18 @@ ShortReadMapper::~ShortReadMapper() {
     }
     delete _ref_seq;
     delete _bml_sel;
+
+    delete _training_sw;
+    delete _seeding_sw;
+    delete _seed_extraction_sw;
 }
 
 void ShortReadMapper::trainBF(bool ignoreSatellite) {
     cout << "Start training the Bloom filter" << endl;
     if (ignoreSatellite) cout << "Ignore satellite DNA" << endl;
+
+    // Start stopwatch
+    _training_sw->start();
 
     // Seed
     uint64_t seed = 0;
@@ -409,12 +430,15 @@ void ShortReadMapper::trainBF(bool ignoreSatellite) {
 
             base_cnt += 1;
             if (base_cnt % 10000000 == 0)
-                cout << "Processed " << base_cnt << " seeds" << endl;
+                cout << "[trainBF] Processed " << base_cnt << " seeds" << endl;
             if (base_cnt == _ref_size) break;
         }
     }
 
     // printSeedCnt(_seed_cnt);
+
+    // Pause stopwatch
+    _training_sw->pause();
 }
 
 void ShortReadMapper::writeBF() {
@@ -433,6 +457,9 @@ void ShortReadMapper::readBF() {
 
 void ShortReadMapper::mapRead() {
     cout << "Start mapping the reads" << endl;
+
+    // Start stopwatch
+    _seeding_sw->start();
 
     // Open read file
     ifstream read_seq_fs(_read_path);
@@ -483,16 +510,27 @@ void ShortReadMapper::mapRead() {
 
         read_cnt += 1;
         if (read_cnt % 1000 == 0)
-            cout << "Processed " << read_cnt << " reads" << endl;
+            cout << "[mapRead] Processed " << read_cnt << " reads" << endl;
     }
+
+    // pause stopwatch
+    _seeding_sw->pause();
 }
 
 void ShortReadMapper::displayResult() {
     int sum = _correctly_mapped + _wrongly_mapped + _satellite + _not_mapped;
 
+    cout << "\n---- Mapping Result ----" << endl;
     cout << "Correctly mapped: " << setw(5) << _correctly_mapped << endl;
     cout << "Wrongly mapped:   " << setw(5) << _wrongly_mapped << endl;
     cout << "Satellite:        " << setw(5) << _satellite << endl;
     cout << "Not mapped:       " << setw(5) << _not_mapped << endl;
     cout << "Total:            " << setw(5) << sum << endl;
+
+    cout << "\n---- Duration (sec) ----" << endl;
+    cout << fixed << setprecision(2);
+    cout << "Training:         " << setw(5) << _training_sw->getSec() << endl;
+    cout << "Seeding:          " << setw(5) << _seeding_sw->getSec() << endl;
+    cout << "Seed extraction:  " << setw(5) << _seed_extraction_sw->getSec()
+         << endl;
 }

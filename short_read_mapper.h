@@ -1,5 +1,6 @@
 
 #include <cstdlib>
+#include <ctime>
 #include <string>
 #include <unordered_map>
 
@@ -10,6 +11,24 @@ using namespace std;
 
 #ifndef __SHORT_SEQ_MAPPER__
 #define __SHORT_SEQ_MAPPER__
+
+class Stopwatch {
+   private:
+    clock_t _duration;
+    clock_t _start_time;
+
+   public:
+    void reset() {
+        _duration = 0;
+        _start_time = 0;
+    }
+    void start() { _start_time = clock(); }
+    void pause() {
+        _duration += clock() - _start_time;
+        _start_time = 0;
+    }
+    float getSec() { return (float)_duration / (float)CLOCKS_PER_SEC; }
+};
 
 class ShortReadMapper {
    private:
@@ -80,6 +99,12 @@ class ShortReadMapper {
     // Seed count used to ignore satellite when training BF
     unordered_map<uint64_t, int> _seed_cnt;
 
+    // Stopwatch
+    Stopwatch* _training_sw;
+    Stopwatch* _seeding_sw;
+    Stopwatch* _seed_extraction_sw;
+
+    // Private functions
     void genSeedMask();
     void updateSeed(char&, uint64_t&);
     void updateRefSeq(char&, long);
