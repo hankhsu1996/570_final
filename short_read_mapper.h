@@ -45,38 +45,18 @@ class ShortReadMapper {
     long _ans_margin;
     long _satellite_threshold;
 
-    // Bloom filters configuration
-    // 16 MB for each Bloom filter in layer 1
-    // 64 kB for each Bloom filter in layer 2
-    // 256 Bytes for each Bloom filter in layer 3
-    long _bf_size1;
-    long _bf_size2;
-    long _bf_size3;
-
-    // 256 layer 1 Bloom filters
-    // 256 layer 2 Bloom filters associated with one layer 1 BF
-    // 256 layer 3 Bloom filters associated with one layer 2 BF
-    long _bf_amount1;
-    long _bf_amount2;
-    long _bf_amount3;
-
-    long _bf_total1;
-    long _bf_total2;
-    long _bf_total3;
-
-    // Save 256 * 256 * 256 seeds in a Bloom filter in layer 1
-    // Save 256 * 256 seeds in a Bloom filter in layer 2
-    // Save 256 seeds in a Bloom filter in layer 3
-    long _seed_range1;
-    long _seed_range2;
-    long _seed_range3;
+    // Layer configuration
+    int _layer_num;
+    long* _bf_size;
+    long* _bf_amount;
+    long* _bf_total;
+    long* _seed_range;
+    Layer** _layers;
+    int* _layer_hit_cnt;
 
     // Mapping configuration
     long _test_num;
     long _ref_size;
-
-    // Hierarchical Bloom filter layers
-    Layer* _layer[3];
 
     // Full reference sequence
     char* _ref_seq;
@@ -89,12 +69,6 @@ class ShortReadMapper {
     int _wrongly_mapped;
     int _satellite;
     int _not_mapped;
-
-    // Total hit count in each layer
-    // If hit_cnt > _satellite_threshold, read is satellite
-    int _layer1_hit_cnt;
-    int _layer2_hit_cnt;
-    int _layer3_hit_cnt;
 
     // Seed count used to ignore satellite when training BF
     unordered_map<uint64_t, int> _seed_cnt;
@@ -110,7 +84,7 @@ class ShortReadMapper {
     void updateRefSeq(char&, long);
     void initQuery();
     int queryLayer(string&, int, long, long);
-    void updateScoreboard(int&, long&, long&);
+    void updateScoreboard(int&, long&, long&, bool);
     string getRefSeqFromLoc(long, int);
     bool isSatellite(int, int[]);
 

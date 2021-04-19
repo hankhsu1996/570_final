@@ -1,3 +1,4 @@
+#include <cmath>
 #include <map>
 #include <unordered_map>
 
@@ -41,4 +42,32 @@ void printSeedCnt(unordered_map<uint64_t, int>& _seed_cnt) {
     }
 }
 
-void printHitCnt(int layer, int hit_cnt[]) {}
+void printHitCnt(int layer, int hit_cnt[], int amount) {
+    if (layer == 0) {
+        cout << "[index]  ";
+        for (int i = 0; i < amount; i++) {
+            cout << setw(2) << i % 100 << ' ';
+        }
+        cout << endl;
+    }
+
+    cout << "[layer" << layer << "] ";
+    for (int i = 0; i < amount; i++) {
+        cout << setw(2) << hit_cnt[i] << ' ';
+    }
+    cout << endl;
+}
+
+long meanPlus2Stdev(int arr[], int len) {
+    float sum = 0;
+    float mean;
+    float var = 0;
+    for (int i = 0; i < len; i++) {
+        sum += arr[i];
+    }
+    mean = sum / len;
+    for (int i = 0; i < len; i++) {
+        var += pow(arr[i] - mean, 2);
+    }
+    return (long)mean + 2 * (long)sqrt(var / len);
+}
