@@ -2,3 +2,4 @@ short_read_mapper
 *.hex
 *.dat
 *.save
+out

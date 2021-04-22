@@ -117,14 +117,24 @@ int ShortReadMapper::queryLayer(string& read, int layer_id, long hier_offset,
             _layers[layer_id]->query(seed, hit_cnt, hier_offset, false);
     }
 
-    // If too many hits, return satelllite code
-    if (isSatellite(layer_id, hit_cnt)) return READ_SATELLITE;
-
     long hit_threshold;
     if (layer_id == 0)
-        hit_threshold = meanPlus2Stdev(hit_cnt, bf_amount);
+        hit_threshold = min(meanPlusStdev(hit_cnt, 14, 1), _hit_threshold);
     else
         hit_threshold = _hit_threshold;
+
+    if (layer_id == 1) {
+        int max_hit_cnt = findMax(hit_cnt, bf_amount);
+        if (countHitBF(hit_cnt, bf_amount, hit_threshold) == 0) {
+            hit_threshold = max_hit_cnt;
+        }
+    }
+
+    // printHitCnt(layer_id, hit_cnt, bf_amount);
+
+    // If too many hits, return satelllite code
+    if (layer_id != 0)
+        if (isSatellite(layer_id, hit_cnt)) return READ_SATELLITE;
 
     // For each Bloom filter
     for (int i = 0; i < bf_amount; i++) {
@@ -462,6 +472,14 @@ void ShortReadMapper::mapRead() {
 
         // Only map the forward sequence, ignore the reverse sequence
         if (fwd_rev == "-") continue;
+
+        long bf_idx1 = golden_loc / (256 * 256 * 256);
+        long bf_idx2 = (golden_loc % (256 * 256 * 256)) / (256 * 256);
+        long bf_idx3 = (golden_loc % (256 * 256)) / (256);
+        // cout << "\n" << read << endl;
+        // cout << "golden loc: " << golden_loc;
+        // cout << " (" << bf_idx1 << ", " << bf_idx2 << ", " << bf_idx3 << ")"
+        //      << endl;
 
         // Query the read in each layer recursively
         initQuery();

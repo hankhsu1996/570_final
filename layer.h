@@ -5,6 +5,8 @@ using namespace std;
 #ifndef __LAYER__
 #define __LAYER__
 
+typedef enum MemArrangement { INORDERED, INTERLEAVED } MemArrangement;
+
 class Layer {
    private:
     long _bf_size;
@@ -17,6 +19,9 @@ class Layer {
 
     // hash function parameters
     uint64_t _hash_factor;
+
+    // Memory arrangement
+    MemArrangement _mem_arrangement;
 
     // Bloom filter memory
     int* _memory;

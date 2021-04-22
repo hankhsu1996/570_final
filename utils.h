@@ -58,7 +58,17 @@ void printHitCnt(int layer, int hit_cnt[], int amount) {
     cout << endl;
 }
 
-long meanPlus2Stdev(int arr[], int len) {
+int countHitBF(int hit_cnt[], int amount, int threshold) {
+    int sum = 0;
+    for (int i = 0; i < amount; i++) {
+        if (hit_cnt[i] >= threshold) {
+            sum += 1;
+        }
+    }
+    return sum;
+}
+
+long meanPlusStdev(int arr[], int len, int N) {
     float sum = 0;
     float mean;
     float var = 0;
@@ -69,5 +79,13 @@ long meanPlus2Stdev(int arr[], int len) {
     for (int i = 0; i < len; i++) {
         var += pow(arr[i] - mean, 2);
     }
-    return (long)mean + 2 * (long)sqrt(var / len);
+    return (long)mean + N * (long)sqrt(var / len);
+}
+
+int findMax(int arr[], int len) {
+    int rv = -1;
+    for (int i = 0; i < len; i++) {
+        rv = max(rv, arr[i]);
+    }
+    return rv;
 }

@@ -22,7 +22,7 @@ int main(int argc, char const* argv[]) {
     long ans_margin = 20;
 
     // If a read has #CMLs > N, then it's considered a satellite DNA.
-    long satellite_threshold = 10;
+    long satellite_threshold = 15;
 
     ShortReadMapper mapper = ShortReadMapper(
         ref_path, read_path, read_len, seed_len, query_shift_amt, hit_threshold,

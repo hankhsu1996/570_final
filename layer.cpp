@@ -26,8 +26,13 @@ Layer::Layer(long bf_size, long bf_amount, long bf_total, long seed_range,
     _seed_range = seed_range;
     genBFMask();
     _hash_factor = hash_factor;
+
+    // Memory array
     _mem_size = (bf_size / 32) * bf_total;
     _memory = new int[_mem_size];
+
+    // Memory arrangement
+    _mem_arrangement = INTERLEAVED;
 }
 
 Layer::~Layer() { delete _memory; }
@@ -41,18 +46,36 @@ void Layer::update(uint64_t& seed, long base_cnt) {
     long nth_last_layer = base_cnt / last_layer_range;
     long hier_offset = nth_last_layer * _bf_amount * _bf_size;
 
-    /* Memory content:
-    bit 0 of bf[0] bf[1] ... bf[255]
-    bit 1 of bf[0] bf[1] ... bf[255]
-    ...
-    bit N of bf[0] bf[1] ... bf[255]
-    */
-    long bit_offset = hash_val * _bf_amount;
-    long bf_offset = (base_cnt % last_layer_range) / _seed_range;
-    long mem_idx = hier_offset + bit_offset + bf_offset;
-    long mem_addr = mem_idx / 32;
-    long mem_bit = mem_idx % 32;
-    _memory[mem_addr] |= 1 << (31 - mem_bit);
+    if (_mem_arrangement == INORDERED) {
+        /* Memory content:
+        N = _bf_size
+        bf[0] bit 0, 1, ..., N
+        bf[1] bit 0, 1, ..., N
+        ...
+        bf[255] bit 0, 1, ..., N
+        */
+        long bit_offset = hash_val;
+        long bf_offset =
+            ((base_cnt % last_layer_range) / _seed_range) * _bf_size;
+        long mem_idx = hier_offset + bit_offset + bf_offset;
+        long mem_addr = mem_idx / 32;
+        long mem_bit = mem_idx % 32;
+        _memory[mem_addr] |= 1 << (31 - mem_bit);
+    }
+    else if (_mem_arrangement == INTERLEAVED) {
+        /* Memory content:
+        bit 0 of bf[0] bf[1] ... bf[255]
+        bit 1 of bf[0] bf[1] ... bf[255]
+        ...
+        bit N of bf[0] bf[1] ... bf[255]
+        */
+        long bit_offset = hash_val * _bf_amount;
+        long bf_offset = (base_cnt % last_layer_range) / _seed_range;
+        long mem_idx = hier_offset + bit_offset + bf_offset;
+        long mem_addr = mem_idx / 32;
+        long mem_bit = mem_idx % 32;
+        _memory[mem_addr] |= 1 << (31 - mem_bit);
+    }
 }
 
 void Layer::query(uint64_t& seed, int hit_cnt[], long hier_offset,
@@ -60,24 +83,45 @@ void Layer::query(uint64_t& seed, int hit_cnt[], long hier_offset,
     // hash_function
     uint64_t hash_val = (seed ^ _hash_factor) & _bf_mask;
 
-    long bit_offset = hash_val * _bf_amount;
+    if (_mem_arrangement == INORDERED) {
+        long bit_offset = hash_val;
+        for (int i = 0; i < _bf_amount; i++) {
+            long bf_offset = i * _bf_size;
+            long mem_idx = hier_offset + bit_offset + bf_offset;
+            long mem_addr = mem_idx / 32;
+            int mem_bit = mem_idx % 32;
 
-    // For each Bloom filters in layer 1, compare the hash value
-    for (int i = 0; i < _bf_amount; i++) {
-        long mem_idx = hier_offset + bit_offset + i;
-        long mem_addr = mem_idx / 32;
-        int mem_bit = mem_idx % 32;
+            bool hit = isHit(_memory[mem_addr], mem_bit);
 
-        bool hit = isHit(_memory[mem_addr], mem_bit);
+            if (or_next && i < _bf_amount - 1) {
+                mem_idx += _bf_size;
+                mem_addr = mem_idx / 32;
+                mem_bit = mem_idx % 32;
+                hit |= isHit(_memory[mem_addr], mem_bit);
+            }
 
-        if (or_next && i < _bf_amount - 1) {
-            mem_idx += 1;
-            mem_addr = mem_idx / 32;
-            mem_bit = mem_idx % 32;
-            hit |= isHit(_memory[mem_addr], mem_bit);
+            hit_cnt[i] += hit;
         }
+    }
+    else if (_mem_arrangement == INTERLEAVED) {
+        long bit_offset = hash_val * _bf_amount;
+        for (int i = 0; i < _bf_amount; i++) {
+            long bf_offset = i;
+            long mem_idx = hier_offset + bit_offset + bf_offset;
+            long mem_addr = mem_idx / 32;
+            int mem_bit = mem_idx % 32;
 
-        hit_cnt[i] += hit;
+            bool hit = isHit(_memory[mem_addr], mem_bit);
+
+            if (or_next && i < _bf_amount - 1) {
+                mem_idx += 1;
+                mem_addr = mem_idx / 32;
+                mem_bit = mem_idx % 32;
+                hit |= isHit(_memory[mem_addr], mem_bit);
+            }
+
+            hit_cnt[i] += hit;
+        }
     }
 }
 
